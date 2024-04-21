@@ -1,6 +1,6 @@
 # talosctl-compose
 
-Sample config management repository for Talos. Using rake to generate `machineconfig` yamls.
+Sample config management repository for Talos. Using `rake` to generate `machineconfig` yamls.
 
 ## Prerequisites
 
