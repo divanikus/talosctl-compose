@@ -1,0 +1,28 @@
+name: dev
+assetsBaseUrl: http://matchbox.lan:8080/assets/
+kubeVersion: 1.29.3
+controlPlane:
+  endpoint: https://dev.lan:6443
+
+generate:
+- cilium
+
+patches:
+- kubeprism
+
+nodes:
+  - type: controlplane
+    installDisk: /dev/sda
+    patches:
+    - allow_scheduling_on_control_planes
+    - cilium
+    manifests:
+    - openebs
+    machines:
+    - ip: 10.1.0.10
+      mac: BD:B3:2B:97:3A:E9
+  - type: worker
+    installDisk: /dev/sda
+    machines:
+    - ip: 10.1.0.20
+      mac: 68:82:6D:19:6D:1C

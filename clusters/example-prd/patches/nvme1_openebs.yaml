@@ -1,0 +1,14 @@
+machine:
+  disks:
+    - device: /dev/nvme1n1
+      partitions:
+        - mountpoint: /var/openebs/local
+  kubelet:
+    extraMounts:
+      - destination: /var/openebs/local
+        type: bind
+        source: /var/openebs/local
+        options:
+          - bind
+          - rshared
+          - rw

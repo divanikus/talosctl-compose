@@ -1,0 +1,50 @@
+name: prd
+assetsBaseUrl: http://matchbox.lan:8080/assets/
+version: 1.6.7
+kubeVersion: 1.28.9
+controlPlane:
+  endpoint: https://prd.lan:6443
+
+generate:
+- cilium
+
+patches:
+- cilium
+- kubeprism
+
+nodes:
+  - type: controlplane
+    installDisk: /dev/nvme0n1
+    patches:
+    - allow_scheduling_on_control_planes
+    - nvme1_openebs
+    manifests:
+    - openebs
+    - cilium
+    machines:
+    - ip: 10.2.0.10
+      mac: 9F:1C:9B:80:D1:24
+    - ip: 10.2.0.11
+      mac: 9E:8C:EF:B9:28:C6
+    - ip: 10.2.0.12
+      mac: 8F:1D:7A:5E:16:C7
+  - type: worker
+    installDisk: /dev/nvme0n1
+    patches:
+    - nvme1_openebs
+    machines:
+    - ip: 10.2.1.10
+      mac: 72:63:FB:F2:D4:D0
+    - ip: 10.2.1.11
+      mac: A5:C1:17:3B:53:B4
+  - type: worker
+    installDisk: /dev/sda
+    machines:
+    - ip: 10.2.2.10
+      mac: 36:41:96:D5:4E:54
+    - ip: 10.2.2.11
+      mac: 49:F6:60:AE:D4:32
+    - ip: 10.2.2.12
+      mac: 6F:98:F2:F5:D3:5D
+    - ip: 10.2.2.13
+      mac: 73:4D:DD:A1:2C:89
