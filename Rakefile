@@ -6,8 +6,6 @@ require 'pp'
 Dir.chdir(Rake.original_dir)
 
 TALOS_VERSION      = "1.7.0"
-CILIUM_CLI_VERSION = "0.16.4"
-CILIUM_VERSION     = "1.15.4"
 
 module Plan
   @@_data = File.exist?("plan.yaml") ? YAML.load_file("plan.yaml") : {}
@@ -127,33 +125,23 @@ file "talosctl.exe" do |t|
   sh "curl -L --fail -o talosctl.exe https://github.com/siderolabs/talos/releases/download/v#{TALOS_VERSION}/talosctl-windows-amd64.exe"
 end
 
-file "/usr/local/bin/cilium" do |t|
-  sh "curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/v#{CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz"
-  if Process.uid == 0
-    sh "tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin"
-  else
-    puts "WARN! Re-run task as root to install"
-  end
-end
-
-file "cilium.exe" do |t|
-  sh "curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/v#{CILIUM_CLI_VERSION}/cilium-windows-amd64.tar.gz"
-  sh "tar -xzvf cilium-windows-amd64.tar.gz"
-  rm "cilium-windows-amd64.tar.gz"
-end
-
 case RUBY_PLATFORM 
 when /x86_64-linux/
   task talosctl: ["/usr/local/bin/talosctl"]
-  task ciliumctl: ["/usr/local/bin/cilium"]
 when /x64-mingw/
   task talosctl: ["talosctl.exe"]
-  task ciliumctl: ["cilium.exe"]
+end
+
+task "clean" do |t|
+  Dir.glob('**/out').each do |x|
+    next unless File.directory?(x)
+    puts "Removing #{x}..."
+    FileUtils.rm_rf x
+  end
 end
 
 unless Plan.data.empty?
   directory "out"
-  directory "out/assets"
   
   file "plan.yaml" do |t|
     puts "Create plan.yaml first!"
@@ -164,7 +152,7 @@ unless Plan.data.empty?
     # Forcibly ignore existing secrets.yaml
     if File.exist?("secrets.yaml")
       puts "File 'secrets.yaml' already exists"
-      FileUtils.touch("secrets.yaml")
+      #FileUtils.touch("secrets.yaml")
     else
       sh "talosctl gen secrets"
     end
@@ -188,30 +176,30 @@ profiles = []
 groups   = []
 
 if Plan.data.key?('nodes') and !Plan.data['nodes'].empty?
+  version = Plan.data.fetch("version", TALOS_VERSION)
+
   tmp_dir  = "out/tmp"
   ptch_dir = "out/tmp/patches"
-  asst_dir = "out/assets/#{Plan.data['name']}"
+  asst_base_dir = "../../out/assets"
+  asst_dir  = "#{asst_base_dir}/#{Plan.data['name']}"
+  talos_dir = "#{asst_base_dir}/talos/v#{version}"
   defined  = []
-  
+
   directory tmp_dir
   directory ptch_dir
+  directory asst_base_dir
+  directory talos_dir
   directory asst_dir
-  
-  task "clean" do |t|
-    FileUtils.rm_rf "out/"
-  end
 
-  file asst_dir + "/vmlinuz" => asst_dir do |t|
-    version = Plan.data.fetch("version", TALOS_VERSION)
-    sh "curl -L --fail -o #{asst_dir}/vmlinuz https://github.com/siderolabs/talos/releases/download/v#{version}/vmlinuz-amd64"
+  file talos_dir + "/vmlinuz" => talos_dir do |t|
+    sh "curl -L --fail -o #{talos_dir}/vmlinuz https://github.com/siderolabs/talos/releases/download/v#{version}/vmlinuz-amd64"
   end
-  assets.push(asst_dir + "/vmlinuz")
+  assets.push(talos_dir + "/vmlinuz")
   
-  file asst_dir + "/initramfs.xz" => asst_dir do |t|
-    version = Plan.data.fetch("version", TALOS_VERSION)
-    sh "curl -L --fail -o #{asst_dir}/initramfs.xz https://github.com/siderolabs/talos/releases/download/v#{version}/initramfs-amd64.xz"
+  file talos_dir + "/initramfs.xz" => talos_dir do |t|
+    sh "curl -L --fail -o #{talos_dir}/initramfs.xz https://github.com/siderolabs/talos/releases/download/v#{version}/initramfs-amd64.xz"
   end
-  assets.push(asst_dir + "/initramfs.xz")
+  assets.push(talos_dir + "/initramfs.xz")
 
   Plan.data['nodes'].each.with_index do |node, index|
     manifest = Plan.talosManifest(index) + ".yaml"
@@ -298,8 +286,8 @@ if Plan.data.key?('nodes') and !Plan.data['nodes'].empty?
 
     assets.push(path)
 
-    prof_dir  = "out/profiles"
-    group_dir = "out/groups"
+    prof_dir  = "../../out/profiles"
+    group_dir = "../../out/groups"
     directory prof_dir
     directory group_dir
 
@@ -313,8 +301,8 @@ if Plan.data.key?('nodes') and !Plan.data['nodes'].empty?
         "id": profile,
         "name": profile,
         "boot": {
-          "kernel": "/assets/#{Plan.data['name']}/vmlinuz",
-          "initrd": ["/assets/#{Plan.data['name']}/initramfs.xz"],
+          "kernel": "/assets/talos/v#{version}/vmlinuz",
+          "initrd": ["/assets/talos/v#{version}/initramfs.xz"],
           "args": [
             "initrd=initramfs.xz",
             "init_on_alloc=1",
@@ -350,8 +338,18 @@ if Plan.data.key?('nodes') and !Plan.data['nodes'].empty?
   end
 end
 
-task "assets" => assets
-task "profiles" => profiles
-task "groups" => groups
-task "matchbox" => ["profiles", "groups"]
-task :default => ["assets", "matchbox"]
+if __dir__ == Rake.original_dir
+  task :default do |t|
+    Dir.glob("clusters/**").each do |dir|
+      Dir.chdir(dir) do
+        sh "rake"
+      end
+    end
+  end
+else
+  task "assets" => assets
+  task "profiles" => profiles
+  task "groups" => groups
+  task "matchbox" => ["profiles", "groups"]
+  task :default => ["assets", "matchbox"]
+end
