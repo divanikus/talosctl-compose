@@ -5,7 +5,7 @@ require 'pp'
 
 Dir.chdir(Rake.original_dir)
 
-TALOS_VERSION      = "1.7.0"
+TALOS_VERSION      = "1.7.4"
 
 module Plan
   @@_data = File.exist?("plan.yaml") ? YAML.load_file("plan.yaml") : {}
