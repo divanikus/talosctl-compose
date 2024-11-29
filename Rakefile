@@ -5,7 +5,7 @@ require 'pp'
 
 Dir.chdir(Rake.original_dir)
 
-TALOS_VERSION      = "1.7.4"
+TALOS_VERSION      = "1.8.3"
 
 module Plan
   @@_data = File.exist?("plan.yaml") ? YAML.load_file("plan.yaml") : {}
@@ -177,6 +177,13 @@ groups   = []
 
 if Plan.data.key?('nodes') and !Plan.data['nodes'].empty?
   version = Plan.data.fetch("version", TALOS_VERSION)
+  is_factory = Plan.data.key?("schematicId")
+  image_link = if is_factory
+    "https://factory.talos.dev/image/61a7aebeee296befe9bd97749c052685467141b1ae1a0f5dbcef4d4c13d96ba6/v#{version}"
+  else
+    "https://github.com/siderolabs/talos/releases/download/v#{version}"
+  end
+  image_suffix = is_factory ? "-" + Plan.data['schematicId'][-8, 8] : ""
 
   tmp_dir  = "out/tmp"
   ptch_dir = "out/tmp/patches"
@@ -191,15 +198,20 @@ if Plan.data.key?('nodes') and !Plan.data['nodes'].empty?
   directory talos_dir
   directory asst_dir
 
-  file talos_dir + "/vmlinuz" => talos_dir do |t|
-    sh "curl -L --fail -o #{talos_dir}/vmlinuz https://github.com/siderolabs/talos/releases/download/v#{version}/vmlinuz-amd64"
+  file talos_dir + "/vmlinuz" + image_suffix => talos_dir do |t|
+    link = if is_factory
+      "#{image_link}/kernel-amd64"
+    else
+      "#{image_link}/vmlinuz-amd64"
+    end
+    sh "curl -L --fail -o #{talos_dir}/vmlinuz#{image_suffix} #{link}"
   end
-  assets.push(talos_dir + "/vmlinuz")
+  assets.push(talos_dir + "/vmlinuz" + image_suffix)
   
-  file talos_dir + "/initramfs.xz" => talos_dir do |t|
-    sh "curl -L --fail -o #{talos_dir}/initramfs.xz https://github.com/siderolabs/talos/releases/download/v#{version}/initramfs-amd64.xz"
+  file talos_dir + "/initramfs#{image_suffix}.xz" => talos_dir do |t|
+    sh "curl -L --fail -o #{talos_dir}/initramfs#{image_suffix}.xz #{image_link}/initramfs-amd64.xz"
   end
-  assets.push(talos_dir + "/initramfs.xz")
+  assets.push(talos_dir + "/initramfs" + image_suffix + ".xz")
 
   Plan.data['nodes'].each.with_index do |node, index|
     manifest = Plan.talosManifest(index) + ".yaml"
@@ -276,6 +288,9 @@ if Plan.data.key?('nodes') and !Plan.data['nodes'].empty?
       type = node['type'] == 'controlplane' ? 'controlplane' : 'worker' # stupid sanity check
       cmd  = "talosctl gen config -t #{type} -o #{path} --with-secrets secrets.yaml "
       cmd += "#{Plan.data['name']} #{Plan.data['controlPlane']['endpoint']} "
+      if is_factory
+        cmd += "--install-image factory.talos.dev/installer/#{Plan.data['schematicId']}:v#{version} "
+      end
       cmd += "--install-disk #{node['installDisk']} " if node.key?('installDisk')
       cmd += "--talos-version v#{Plan.data['version']} " if Plan.data.key?('version')
       cmd += "--kubernetes-version #{Plan.data['kubeVersion']} " if Plan.data.key?('kubeVersion')
@@ -301,10 +316,10 @@ if Plan.data.key?('nodes') and !Plan.data['nodes'].empty?
         "id": profile,
         "name": profile,
         "boot": {
-          "kernel": "/assets/talos/v#{version}/vmlinuz",
-          "initrd": ["/assets/talos/v#{version}/initramfs.xz"],
+          "kernel": "/assets/talos/v#{version}/vmlinuz#{image_suffix}",
+          "initrd": ["/assets/talos/v#{version}/initramfs#{image_suffix}.xz"],
           "args": [
-            "initrd=initramfs.xz",
+            "initrd=initramfs#{image_suffix}.xz",
             "init_on_alloc=1",
             "slab_nomerge",
             "pti=on",
