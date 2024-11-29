@@ -179,7 +179,7 @@ if Plan.data.key?('nodes') and !Plan.data['nodes'].empty?
   version = Plan.data.fetch("version", TALOS_VERSION)
   is_factory = Plan.data.key?("schematicId")
   image_link = if is_factory
-    "https://factory.talos.dev/image/61a7aebeee296befe9bd97749c052685467141b1ae1a0f5dbcef4d4c13d96ba6/v#{version}"
+    "https://factory.talos.dev/image/#{Plan.data['schematicId']}/v#{version}"
   else
     "https://github.com/siderolabs/talos/releases/download/v#{version}"
   end
